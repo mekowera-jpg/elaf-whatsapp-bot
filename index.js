@@ -14,6 +14,61 @@ const GEMINI_MODEL =
   process.env.GEMINI_MODEL || "gemini-3.5-flash";
 const GRAPH_API_VERSION =
   process.env.GRAPH_API_VERSION || "v25.0";
+const ai = new GoogleGenAI({
+  apiKey: GEMINI_API_KEY,
+});
+
+const conversations = new Map();
+const processedMessageIds = new Map();
+
+const MAX_HISTORY_ITEMS = 12;
+const HISTORY_TTL_MS = 6 * 60 * 60 * 1000;
+const DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getHistory(userId) {
+  return conversations.get(userId)?.items || [];
+}
+
+function saveTurn(userId, userText, assistantText) {
+  const items = [
+    ...getHistory(userId),
+    {
+      role: "user",
+      parts: [{ text: userText }],
+    },
+    {
+      role: "model",
+      parts: [{ text: assistantText }],
+    },
+  ].slice(-MAX_HISTORY_ITEMS);
+
+  conversations.set(userId, {
+    items,
+    updatedAt: Date.now(),
+  });
+}
+
+function cleanupCaches() {
+  const now = Date.now();
+
+  for (const [key, value] of conversations.entries()) {
+    if (now - value.updatedAt > HISTORY_TTL_MS) {
+      conversations.delete(key);
+    }
+  }
+
+  for (const [key, createdAt] of processedMessageIds.entries()) {
+    if (now - createdAt > DEDUPE_TTL_MS) {
+      processedMessageIds.delete(key);
+    }
+  }
+}
+
+setInterval(cleanupCaches, 30 * 60 * 1000).unref();
 function extractMessage(body) {
   const value = body?.entry?.[0]?.changes?.[0]?.value;
   const message = value?.messages?.[0];
@@ -45,7 +100,7 @@ function extractMessage(body) {
     text: "رسالة غير نصية",
   };
 }
-  async function askGemini(userId, userText) {
+ async function askGemini(userId, userText) {
   const historyText = getHistory(userId)
     .map((item) => {
       const role =
