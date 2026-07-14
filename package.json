@@ -3,16 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Elaf Al Maqam WhatsApp assistant using Meta Cloud API and Gemini",
+  "description": "Elaf Al Maqam WhatsApp assistant",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "check": "node --check index.js"
+    "start": "node index.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@google/genai": "^1.14.0",
     "express": "^5.1.0"
   }
 }
