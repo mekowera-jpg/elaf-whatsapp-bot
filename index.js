@@ -1,56 +1,78 @@
-import express from "express";
-import { SYSTEM_PROMPT } from "./system_prompt.js";
-
-const app = express();
-app.use(express.json({ limit: "1mb" }));
-
-const PORT = process.env.PORT || 8080;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || "gemini-3.5-flash";
-const GRAPH_API_VERSION =
-  process.env.GRAPH_API_VERSION || "v25.0";
-
-const conversations = new Map();
-const processedMessageIds = new Map();
-
-const MAX_HISTORY_ITEMS = 16;
-const HISTORY_TTL_MS = 6 * 60 * 60 * 1000;
-const DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
-
-function requireEnv() {
-  const missing = [];
-
-  for (const [name, value] of Object.entries({
-    VERIFY_TOKEN,
-    WHATSAPP_TOKEN,
-    PHONE_NUMBER_ID,
-    GEMINI_API_KEY,
-  })) {
-    if (!value) {
-      missing.push(name);
-    }
-  }
-
-  if (missing.length) {
-    console.warn(
-      `Missing environment variables: ${missing.join(", ")}`
-    );
-  }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-requireEnv();
+async function askGemini(userId, userText) {
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/` +
+    `${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
-function cleanupCaches() {
-  const now = Date.now();
+  const contents = [
+    ...getHistory(userId),
+    { role: "user", parts: [{ text: userText }] },
+  ];
 
-  for (const [key, value] of conversations.entries()) {
-    if (now - value.updatedAt > HISTORY_TTL_MS) {
-      conversations.delete(key);
+  const requestBody = {
+    systemInstruction: {
+      parts: [{ text: SYSTEM_PROMPT }],
+    },
+    contents,
+    generationConfig: {
+      temperature: 0.25,
+      topP: 0.9,
+      maxOutputTokens: 350,
+    },
+  };
+
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      const replyText =
+        data?.candidates?.[0]?.content?.parts
+          ?.map((part) => part.text || "")
+          .join("")
+          .trim();
+
+      if (!replyText) {
+        throw new Error(
+          `Gemini returned no text: ${JSON.stringify(data)}`
+        );
+      }
+
+      console.log(`Gemini succeeded on attempt ${attempt}`);
+      return replyText;
     }
+
+    console.error(
+      `Gemini attempt ${attempt} failed: ${response.status}`,
+      JSON.stringify(data)
+    );
+
+    const retryable =
+      response.status === 429 ||
+      response.status === 500 ||
+      response.status === 503;
+    if (!retryable || attempt === 4) {
+      throw new Error(
+        `Gemini API error ${response.status}: ${JSON.stringify(data)}`
+      );
+    }
+
+    console.log(
+      `Retrying Gemini in ${attempt * 2500} ms...`
+    );
+
+    await sleep(attempt * 2500);
   }
 
-  for (const [key, createdAt] of processedMessageIds
+  throw new Error("Gemini failed after retries.");
+}
