@@ -401,6 +401,25 @@ app.get("/webhook", (req, res) => {
 });
 
 app.post("/webhook", (req, res) => {
+  console.log("Webhook POST received.");
+
+  const value =
+    req.body?.entry?.[0]?.changes?.[0]?.value;
+
+  const status =
+    value?.statuses?.[0];
+
+  if (status) {
+    console.log(
+      "WhatsApp message status:",
+      JSON.stringify(status)
+    );
+  }
+
+  res.sendStatus(200);
+
+  void processIncoming(req.body);
+});
   console.log(
     "Webhook POST received."
   );
