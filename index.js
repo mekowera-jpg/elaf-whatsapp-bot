@@ -15,7 +15,7 @@ const GEMINI_MODEL =
 const GRAPH_API_VERSION =
   process.env.GRAPH_API_VERSION || "v25.0";
 
-const
+
   async function askGemini(userId, userText) {
   const historyText = getHistory(userId)
     .map((item) => {
