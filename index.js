@@ -20,7 +20,7 @@ async function askGemini(userId, userText) {
     generationConfig: {
       temperature: 0.25,
       topP: 0.9,
-      maxOutputTokens: 350,
+      maxOutputTokens: 1200,
     },
   };
 
