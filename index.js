@@ -1,4 +1,5 @@
 import express from "express";
+import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_PROMPT } from "./system_prompt.js";
 
 const app = express();
@@ -14,187 +15,106 @@ const GEMINI_MODEL =
 const GRAPH_API_VERSION =
   process.env.GRAPH_API_VERSION || "v25.0";
 
-const conversations = new Map();
-const processedMessageIds = new Map();
+const
+  async function askGemini(userId, userText) {
+  const historyText = getHistory(userId)
+    .map((item) => {
+      const role =
+        item.role === "model" ? "Assistant" : "Guest";
 
-const MAX_HISTORY_ITEMS = 16;
-const HISTORY_TTL_MS = 6 * 60 * 60 * 1000;
-const DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
+      const text = item.parts
+        ?.map((part) => part.text || "")
+        .join("");
 
-function requireEnv() {
-  const missing = [];
+      return `${role}: ${text}`;
+    })
+    .join("\n");
 
-  for (const [name, value] of Object.entries({
-    VERIFY_TOKEN,
-    WHATSAPP_TOKEN,
-    PHONE_NUMBER_ID,
-    GEMINI_API_KEY,
-  })) {
-    if (!value) missing.push(name);
-  }
+  const prompt = `
+${SYSTEM_PROMPT}
 
-  if (missing.length) {
-    console.warn(
-      `Missing environment variables: ${missing.join(", ")}`
-    );
-  }
-}
+Previous conversation:
+${historyText || "No previous conversation."}
 
-requireEnv();
+Guest:
+${userText}
+`;
 
-function cleanupCaches() {
-  const now = Date.now();
+  const maxAttempts = 4;
 
-  for (const [key, value] of conversations.entries()) {
-    if (now - value.updatedAt > HISTORY_TTL_MS) {
-      conversations.delete(key);
-    }
-  }
+  for (
+    let attempt = 1;
+    attempt <= maxAttempts;
+    attempt += 1
+  ) {
+    try {
+      console.log(
+        `Calling Gemini attempt ${attempt}/${maxAttempts}`
+      );
 
-  for (const [key, createdAt] of processedMessageIds.entries()) {
-    if (now - createdAt > DEDUPE_TTL_MS) {
-      processedMessageIds.delete(key);
-    }
-  }
-}
+      const response =
+        await ai.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: prompt,
+          config: {
+            temperature: 0.25,
+            topP: 0.9,
+            maxOutputTokens: 1200,
+          },
+        });
 
-setInterval(cleanupCaches, 30 * 60 * 1000).unref();
-
-function getHistory(userId) {
-  const entry = conversations.get(userId);
-  return entry?.items || [];
-}
-
-function saveTurn(userId, userText, assistantText) {
-  const previous = getHistory(userId);
-
-  const items = [
-    ...previous,
-    { role: "user", parts: [{ text: userText }] },
-    { role: "model", parts: [{ text: assistantText }] },
-  ].slice(-MAX_HISTORY_ITEMS);
-
-  conversations.set(userId, {
-    items,
-    updatedAt: Date.now(),
-  });
-}
-
-function extractTextMessage(body) {
-  const value = body?.entry?.[0]?.changes?.[0]?.value;
-  const message = value?.messages?.[0];
-
-  if (!message) return null;
-
-  const from = message.from;
-  const id = message.id;
-
-  if (message.type === "text") {
-    return {
-      from,
-      id,
-      text: message.text?.body?.trim() || "",
-    };
-  }
-
-  if (message.type === "interactive") {
-    const text =
-      message.interactive?.button_reply?.title ||
-      message.interactive?.list_reply?.title ||
-      "";
-
-    return {
-      from,
-      id,
-      text: text.trim(),
-    };
-  }
-
-  return {
-    from,
-    id,
-    text: "أرسل الضيف رسالة غير نصية. اعتذر باختصار واطلب منه كتابة طلبه نصيًا.",
-  };
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-async function askGemini(userId, userText) {
-  const endpoint =
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
-  const contents = [
-    ...getHistory(userId),
-    { role: "user", parts: [{ text: userText }] },
-  ];
-
-  const requestBody = {
-    systemInstruction: {
-      parts: [{ text: SYSTEM_PROMPT }],
-    },
-    contents,
-    generationConfig: {
-      temperature: 0.25,
-      topP: 0.9,
-      maxOutputTokens: 1200,
-    },
-  };
-
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
       const reply =
-        data?.candidates?.[0]?.content?.parts
-          ?.map((p) => p.text || "")
-          .join("")
-          .trim();
+        response?.text?.trim() || "";
 
-      if (reply) {
-        return reply;
+      if (!reply) {
+        throw new Error(
+          "Gemini returned an empty response."
+        );
       }
 
-      throw new Error(
-        `Gemini returned no text: ${JSON.stringify(data)}`
+      console.log(
+        `Gemini succeeded on attempt ${attempt}`
       );
-    }
 
-    console.error(
-      `Gemini attempt ${attempt} failed (${response.status})`,
-      JSON.stringify(data)
-    );
+      return reply;
+    } catch (error) {
+      const message =
+        error?.message || String(error);
 
-    const retryable =
-      response.status === 429 ||
-      response.status === 500 ||
-      response.status === 502 ||
-      response.status === 503 ||
-      response.status === 504;
-
-    if (!retryable || attempt === 4) {
-      throw new Error(
-        `Gemini API error ${response.status}: ${JSON.stringify(data)}`
+      console.error(
+        `Gemini attempt ${attempt} failed:`,
+        message
       );
-    }
 
-    await sleep(attempt * 3000);
+      const retryable =
+        message.includes("429") ||
+        message.includes("500") ||
+        message.includes("502") ||
+        message.includes("503") ||
+        message.includes("504") ||
+        message.toLowerCase().includes("high demand") ||
+        message.toLowerCase().includes("temporarily unavailable");
+
+      if (
+        !retryable ||
+        attempt === maxAttempts
+      ) {
+        throw error;
+      }
+
+      await sleep(attempt * 3000);
+    }
   }
 
-  throw new Error("Gemini failed after retries.");
+  throw new Error(
+    "Gemini failed after all retry attempts."
+  );
 }
 
 async function sendWhatsAppText(to, text) {
   const endpoint =
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${PHONE_NUMBER_ID}/messages`;
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/` +
+    `${PHONE_NUMBER_ID}/messages`;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -204,6 +124,7 @@ async function sendWhatsAppText(to, text) {
     },
     body: JSON.stringify({
       messaging_product: "whatsapp",
+      recipient_type: "individual",
       to,
       type: "text",
       text: {
@@ -221,20 +142,37 @@ async function sendWhatsAppText(to, text) {
     );
   }
 
+  console.log(
+    `WhatsApp reply sent to ${to}`
+  );
+
   return data;
 }
+
 async function processIncoming(body) {
-  const incoming = extractTextMessage(body);
+  const incoming = extractMessage(body);
 
-  if (!incoming?.from || !incoming?.id || !incoming.text) {
+  if (
+    !incoming?.from ||
+    !incoming?.id ||
+    !incoming.text
+  ) {
     return;
   }
 
-  if (processedMessageIds.has(incoming.id)) {
+  if (
+    processedMessageIds.has(incoming.id)
+  ) {
+    console.log(
+      `Duplicate message ignored: ${incoming.id}`
+    );
     return;
   }
 
-  processedMessageIds.set(incoming.id, Date.now());
+  processedMessageIds.set(
+    incoming.id,
+    Date.now()
+  );
 
   console.log(
     `Incoming message from ${incoming.from}: ${incoming.text}`
@@ -265,19 +203,20 @@ async function processIncoming(body) {
     try {
       await sendWhatsAppText(
         incoming.from,
-        "نعتذر، يوجد ضغط مؤقت على الخدمة. يرجى المحاولة بعد لحظات."
+        "نعتذر، يوجد ضغط مؤقت على الخدمة. يرجى المحاولة مرة أخرى بعد لحظات."
       );
-    } catch (sendError) {
+    } catch (fallbackError) {
       console.error(
         "Fallback message failed:",
-        sendError
+        fallbackError
       );
     }
   }
 }
-
 app.get("/", (_req, res) => {
-  res.status(200).send("Elaf Assistant is running.");
+  res
+    .status(200)
+    .send("Elaf Assistant is running.");
 });
 
 app.get("/health", (_req, res) => {
@@ -289,23 +228,33 @@ app.get("/health", (_req, res) => {
 
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+  const token =
+    req.query["hub.verify_token"];
+  const challenge =
+    req.query["hub.challenge"];
 
   if (
     mode === "subscribe" &&
     token === VERIFY_TOKEN
   ) {
     console.log("Webhook verified.");
-    return res.status(200).send(challenge);
+    return res
+      .status(200)
+      .send(challenge);
   }
+
+  console.error(
+    "Webhook verification failed."
+  );
 
   return res.sendStatus(403);
 });
 
 app.post("/webhook", (req, res) => {
   console.log("Webhook POST received.");
+
   res.sendStatus(200);
+
   void processIncoming(req.body);
 });
 
@@ -320,11 +269,16 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `Elaf Assistant listening on port ${PORT}`
-  );
-  console.log(
-    `Gemini model: ${GEMINI_MODEL}`
-  );
-});
+app.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+    console.log(
+      `Elaf Assistant listening on port ${PORT}`
+    );
+
+    console.log(
+      `Gemini model: ${GEMINI_MODEL}`
+    );
+  }
+);
