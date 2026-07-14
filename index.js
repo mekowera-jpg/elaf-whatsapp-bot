@@ -14,8 +14,37 @@ const GEMINI_MODEL =
   process.env.GEMINI_MODEL || "gemini-3.5-flash";
 const GRAPH_API_VERSION =
   process.env.GRAPH_API_VERSION || "v25.0";
+function extractMessage(body) {
+  const value = body?.entry?.[0]?.changes?.[0]?.value;
+  const message = value?.messages?.[0];
 
+  if (!message) return null;
 
+  if (message.type === "text") {
+    return {
+      from: message.from,
+      id: message.id,
+      text: message.text?.body?.trim() || "",
+    };
+  }
+
+  if (message.type === "interactive") {
+    return {
+      from: message.from,
+      id: message.id,
+      text:
+        message.interactive?.button_reply?.title ||
+        message.interactive?.list_reply?.title ||
+        "",
+    };
+  }
+
+  return {
+    from: message.from,
+    id: message.id,
+    text: "رسالة غير نصية",
+  };
+}
   async function askGemini(userId, userText) {
   const historyText = getHistory(userId)
     .map((item) => {
