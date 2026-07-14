@@ -420,15 +420,7 @@ app.post("/webhook", (req, res) => {
 
   void processIncoming(req.body);
 });
-  console.log(
-    "Webhook POST received."
-  );
-
-  res.sendStatus(200);
-
-  void processIncoming(req.body);
-});
-
+ 
 app.use(
   (error, _req, res, _next) => {
     console.error(
