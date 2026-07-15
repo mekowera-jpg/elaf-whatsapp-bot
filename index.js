@@ -243,43 +243,43 @@ async function askGemini(userId, userText) {
     "Gemini failed after retries."
   );
 }
-
 async function sendWhatsAppText(to, text) {
   const endpoint =
     `https://graph.facebook.com/${GRAPH_API_VERSION}/` +
     `${PHONE_NUMBER_ID}/messages`;
 
+  console.log(`Sending WhatsApp reply to: ${to}`);
+
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
-      Authorization:
-        `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type":
-        "application/json",
+      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       messaging_product: "whatsapp",
       recipient_type: "individual",
-      to,
+      to: String(to),
       type: "text",
       text: {
         preview_url: false,
-        body: text.slice(0, 4096),
+        body: String(text).slice(0, 4096),
       },
     }),
   });
 
   const data = await response.json();
 
+  console.log(
+    `WhatsApp API response ${response.status}:`,
+    JSON.stringify(data)
+  );
+
   if (!response.ok) {
     throw new Error(
       `WhatsApp API error ${response.status}: ${JSON.stringify(data)}`
     );
   }
-
-  console.log(
-    `WhatsApp reply sent to ${to}`
-  );
 
   return data;
 }
