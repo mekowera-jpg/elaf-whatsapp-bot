@@ -169,19 +169,349 @@ function logDeliveryStatuses(body) {
 
   return true;
 }
+const MAKKAH_TIME_ZONE = "Asia/Riyadh";
 
+const HIJRI_MONTHS = {
+  محرم: 1,
+  صفر: 2,
+  "ربيع الأول": 3,
+  "ربيع الاول": 3,
+  "ربيع الثاني": 4,
+  "ربيع الآخر": 4,
+  "ربيع الاخر": 4,
+  "جمادى الأولى": 5,
+  "جمادى الاولى": 5,
+  "جمادى الآخرة": 6,
+  "جمادى الاخرة": 6,
+  رجب: 7,
+  شعبان: 8,
+  رمضان: 9,
+  شوال: 10,
+  "ذو القعدة": 11,
+  "ذو القعده": 11,
+  "ذو الحجة": 12,
+  "ذو الحجه": 12,
+};
+
+function getMakkahDate(offsetDays = 0) {
+  const now = new Date();
+
+  const makkahText = now.toLocaleString("en-US", {
+    timeZone: MAKKAH_TIME_ZONE,
+  });
+
+  const makkahDate = new Date(makkahText);
+
+  makkahDate.setDate(
+    makkahDate.getDate() + offsetDays
+  );
+
+  return makkahDate;
+}
+
+function formatGregorian(date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: MAKKAH_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatGregorianLong(date, locale = "ar-SA") {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: MAKKAH_TIME_ZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function getHijriParts(date) {
+  const formatter = new Intl.DateTimeFormat(
+    "en-US-u-ca-islamic-umalqura",
+    {
+      timeZone: MAKKAH_TIME_ZONE,
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    }
+  );
+
+  const parts = formatter.formatToParts(date);
+
+  const readPart = (type) =>
+    Number(
+      parts.find((part) => part.type === type)
+        ?.value || 0
+    );
+
+  return {
+    day: readPart("day"),
+    month: readPart("month"),
+    year: readPart("year"),
+  };
+}
+
+function formatHijri(date, locale = "ar-SA") {
+  return new Intl.DateTimeFormat(
+    `${locale}-u-ca-islamic-umalqura`,
+    {
+      timeZone: MAKKAH_TIME_ZONE,
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }
+  ).format(date);
+}
+
+function gregorianToHijri(
+  day,
+  month,
+  year
+) {
+  const date = new Date(
+    Date.UTC(year, month - 1, day, 12)
+  );
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return {
+    gregorian: formatGregorian(date),
+    hijri: formatHijri(date),
+  };
+}
+
+function hijriToGregorian(
+  hijriDay,
+  hijriMonth,
+  hijriYear
+) {
+  if (
+    hijriDay < 1 ||
+    hijriDay > 30 ||
+    hijriMonth < 1 ||
+    hijriMonth > 12 ||
+    hijriYear < 1300 ||
+    hijriYear > 1600
+  ) {
+    return null;
+  }
+
+  // تقدير أولي للسنة الميلادية، ثم البحث
+  // عن التاريخ المطابق حسب تقويم أم القرى.
+  const approximateGregorianYear =
+    Math.floor(
+      hijriYear * 0.970224 + 621.5774
+    );
+
+  const searchStart = new Date(
+    Date.UTC(
+      approximateGregorianYear - 1,
+      0,
+      1,
+      12
+    )
+  );
+
+  const searchEnd = new Date(
+    Date.UTC(
+      approximateGregorianYear + 2,
+      11,
+      31,
+      12
+    )
+  );
+
+  for (
+    let current = new Date(searchStart);
+    current <= searchEnd;
+    current.setUTCDate(
+      current.getUTCDate() + 1
+    )
+  ) {
+    const parts = getHijriParts(current);
+
+    if (
+      parts.day === hijriDay &&
+      parts.month === hijriMonth &&
+      parts.year === hijriYear
+    ) {
+      return {
+        hijri: formatHijri(current),
+        gregorian:
+          formatGregorian(current),
+        gregorianLong:
+          formatGregorianLong(current),
+      };
+    }
+  }
+
+  return null;
+}
+
+function extractDateConversions(userText) {
+  const conversions = [];
+
+  // تاريخ ميلادي: 15/08/2026
+  const gregorianRegex =
+    /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/g;
+
+  for (
+    const match of userText.matchAll(
+      gregorianRegex
+    )
+  ) {
+    const result = gregorianToHijri(
+      Number(match[1]),
+      Number(match[2]),
+      Number(match[3])
+    );
+
+    if (result) {
+      conversions.push(
+        `Gregorian ${match[0]} = Hijri ${result.hijri}`
+      );
+    }
+  }
+
+  // تاريخ هجري رقمي: 10/09/1448
+  const hijriNumericRegex =
+    /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](14\d{2})\b/g;
+
+  for (
+    const match of userText.matchAll(
+      hijriNumericRegex
+    )
+  ) {
+    const result = hijriToGregorian(
+      Number(match[1]),
+      Number(match[2]),
+      Number(match[3])
+    );
+
+    if (result) {
+      conversions.push(
+        `Hijri ${match[0]} = Gregorian ${result.gregorian}`
+      );
+    }
+  }
+
+  // تاريخ هجري مكتوب: 10 رمضان 1448
+  const monthNames = Object.keys(
+    HIJRI_MONTHS
+  )
+    .sort((a, b) => b.length - a.length)
+    .join("|");
+
+  const hijriWrittenRegex = new RegExp(
+    `(\\d{1,2})\\s+(${monthNames})\\s+(14\\d{2})`,
+    "g"
+  );
+
+  for (
+    const match of userText.matchAll(
+      hijriWrittenRegex
+    )
+  ) {
+    const month =
+      HIJRI_MONTHS[match[2]];
+
+    const result = hijriToGregorian(
+      Number(match[1]),
+      month,
+      Number(match[3])
+    );
+
+    if (result) {
+      conversions.push(
+        `Hijri ${match[0]} = Gregorian ${result.gregorian}`
+      );
+    }
+  }
+
+  return conversions;
+}
+
+function buildDateContext(userText) {
+  const today = getMakkahDate(0);
+  const tomorrow = getMakkahDate(1);
+  const afterTomorrow = getMakkahDate(2);
+
+  const currentTime =
+    new Intl.DateTimeFormat("ar-SA", {
+      timeZone: MAKKAH_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date());
+
+  const conversions =
+    extractDateConversions(userText);
+
+  return `
+CURRENT MAKKAH DATE AND TIME:
+
+Current time in Makkah:
+${currentTime}
+
+Today:
+Gregorian: ${formatGregorian(today)}
+Hijri: ${formatHijri(today)}
+Day: ${formatGregorianLong(today)}
+
+Tomorrow / غدًا / بكرة / yarın:
+Gregorian: ${formatGregorian(tomorrow)}
+Hijri: ${formatHijri(tomorrow)}
+Day: ${formatGregorianLong(tomorrow)}
+
+After tomorrow / بعد غد / بعد بكرة / öbür gün:
+Gregorian: ${formatGregorian(afterTomorrow)}
+Hijri: ${formatHijri(afterTomorrow)}
+Day: ${formatGregorianLong(afterTomorrow)}
+
+Detected date conversions:
+${
+  conversions.length
+    ? conversions.join("\n")
+    : "No explicit date conversion detected."
+}
+
+DATE RULES:
+- Use Makkah time only.
+- Understand اليوم، بكرة، غدًا، بعد بكرة، بعد غد، tomorrow, after tomorrow, yarın and öbür gün using the exact dates above.
+- When the guest provides a Gregorian date, you may mention its Hijri equivalent.
+- When the guest provides a Hijri date, use the converted Gregorian date shown above.
+- For reservations, the Gregorian date is the final operational reference.
+- A Hijri date may occasionally differ by one day according to the official calendar or moon sighting.
+- Never guess an unclear date.
+`;
+}
 async function askGemini(userId, userText) {
+    const dateContext =
+    buildDateContext(userText);
   const endpoint =
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
   const body = {
     systemInstruction: {
-      parts: [
-        {
-          text: SYSTEM_PROMPT,
-        },
-      ],
+  parts: [
+    {
+      text: `
+${SYSTEM_PROMPT}
+
+${dateContext}
+`,
     },
+  ],
+},
 
     contents: [
       ...getHistory(userId),
