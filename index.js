@@ -669,10 +669,14 @@ async function processIncoming(body) {
     return;
   }
 
-  saveMessage(
+saveMessage(
   incoming.from,
   "guest",
   incoming.text
+);
+
+saveConversation(
+  incoming.from
 );
   processedMessageIds.set(
     incoming.id,
