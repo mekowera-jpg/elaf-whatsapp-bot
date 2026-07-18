@@ -757,8 +757,38 @@ app.get("/api/conversations", (_req, res) => {
   }
 });
 
-app.get("/api/messages/:phone", (req, res) => {
+app.post("/api/conversations/:phone/status", (req, res) => {
   try {
+    const phone = String(req.params.phone || "").trim();
+    const status = String(req.body.status || "").trim();
+
+    if (!["bot", "human", "closed"].includes(status)) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid status",
+      });
+    }
+
+    db.prepare(`
+      UPDATE conversations
+      SET
+        status = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE phone = ?
+    `).run(status, phone);
+
+    res.json({
+      ok: true,
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      ok: false,
+    });
+  }
+});
     const phone = String(req.params.phone || "").trim();
 
     const messages = db.prepare(`
