@@ -8,9 +8,9 @@
   "scripts": {
     "start": "node index.js"
   },
- "engines": {
-  "node": "22.x"
-}
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@google/genai": "^1.14.0",
     "express": "^5.1.0",
