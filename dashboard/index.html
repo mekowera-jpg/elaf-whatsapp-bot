@@ -1,52 +1,655 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<title>Elaf Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<style>
-body{
-    margin:0;
-    background:#f5f5f5;
-    font-family:Tahoma;
-}
+  <title>لوحة مساعد إيلاف</title>
 
-header{
-    background:#0f766e;
-    color:white;
-    padding:18px;
-    font-size:24px;
-}
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-.box{
-    width:300px;
-    margin:40px auto;
-    background:white;
-    padding:25px;
-    border-radius:12px;
-    text-align:center;
-    box-shadow:0 5px 20px rgba(0,0,0,.15);
-}
-</style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      color: #111827;
+    }
 
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      direction: ltr;
+    }
+
+    .sidebar {
+      background: #ffffff;
+      border-right: 1px solid #dfe3e8;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .sidebar-header {
+      padding: 18px;
+      border-bottom: 1px solid #e5e7eb;
+      direction: rtl;
+    }
+
+    .sidebar-header h1 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 11px 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .search-box:focus {
+      border-color: #0f766e;
+    }
+
+    .conversation-list {
+      overflow-y: auto;
+      flex: 1;
+      direction: rtl;
+    }
+
+    .conversation-item {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid #f0f0f0;
+      background: #fff;
+      text-align: right;
+      padding: 15px;
+      cursor: pointer;
+    }
+
+    .conversation-item:hover,
+    .conversation-item.active {
+      background: #f3f8f7;
+    }
+
+    .conversation-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .conversation-phone {
+      font-weight: bold;
+      font-size: 15px;
+      direction: ltr;
+    }
+
+    .conversation-time {
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .conversation-status {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #4b5563;
+    }
+
+    .chat-panel {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: #efeae2;
+    }
+
+    .chat-header {
+      height: 72px;
+      background: #ffffff;
+      border-bottom: 1px solid #dfe3e8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      direction: rtl;
+    }
+
+    .chat-title {
+      font-weight: bold;
+      font-size: 17px;
+      direction: ltr;
+    }
+
+    .chat-status {
+      font-size: 13px;
+      margin-top: 4px;
+      color: #6b7280;
+    }
+
+    .chat-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 0;
+      padding: 9px 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .btn-human {
+      background: #0f766e;
+      color: white;
+    }
+
+    .btn-bot {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-close {
+      background: #dc2626;
+      color: white;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      direction: rtl;
+    }
+
+    .message {
+      max-width: 72%;
+      padding: 10px 13px;
+      border-radius: 10px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    }
+
+    .message.guest {
+      align-self: flex-start;
+      background: #ffffff;
+    }
+
+    .message.bot {
+      align-self: flex-end;
+      background: #d9fdd3;
+    }
+
+    .message.employee {
+      align-self: flex-end;
+      background: #cfe8ff;
+    }
+
+    .message-meta {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #6b7280;
+      text-align: left;
+    }
+
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      color: #6b7280;
+      direction: rtl;
+    }
+
+    .composer {
+      background: #f0f2f5;
+      border-top: 1px solid #dfe3e8;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      direction: rtl;
+    }
+
+    .composer input {
+      flex: 1;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .composer button {
+      width: 90px;
+      border: 0;
+      border-radius: 10px;
+      background: #0f766e;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .composer button:disabled,
+    .composer input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      padding: 20px;
+      text-align: center;
+      color: #6b7280;
+    }
+
+    @media (max-width: 800px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        height: 42vh;
+        border-right: 0;
+        border-bottom: 1px solid #dfe3e8;
+      }
+
+      .chat-panel {
+        height: 58vh;
+      }
+
+      .chat-actions {
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        padding: 7px 9px;
+        font-size: 12px;
+      }
+
+      .message {
+        max-width: 88%;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>مساعد إيلاف</h1>
 
-<header>
+        <input
+          id="searchInput"
+          class="search-box"
+          type="text"
+          placeholder="ابحث برقم الهاتف"
+        />
+      </div>
 
-لوحة موظفي إيلاف المقام
+      <div id="conversationList" class="conversation-list">
+        <div class="loading">جارٍ تحميل المحادثات...</div>
+      </div>
+    </aside>
 
-</header>
+    <main class="chat-panel">
+      <header class="chat-header">
+        <div>
+          <div id="chatTitle" class="chat-title">
+            اختر محادثة
+          </div>
 
-<div class="box">
+          <div id="chatStatus" class="chat-status"></div>
+        </div>
 
-<h2>🚀 Dashboard تعمل بنجاح</h2>
+        <div class="chat-actions">
+          <button id="takeoverBtn" class="btn btn-human" disabled>
+            استلام المحادثة
+          </button>
 
-<p>المرحلة الأولى جاهزة.</p>
+          <button id="botBtn" class="btn btn-bot" disabled>
+            إرجاع للبوت
+          </button>
 
-</div>
+          <button id="closeBtn" class="btn btn-close" disabled>
+            إنهاء
+          </button>
+        </div>
+      </header>
 
+      <section id="messages" class="messages">
+        <div class="empty-state">
+          اختر محادثة من القائمة لعرض الرسائل
+        </div>
+      </section>
+
+      <form id="composer" class="composer">
+        <input
+          id="messageInput"
+          type="text"
+          placeholder="اكتب رسالة للضيف"
+          disabled
+        />
+
+        <button id="sendBtn" type="submit" disabled>
+          إرسال
+        </button>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    let conversations = [];
+    let selectedPhone = null;
+    let selectedStatus = null;
+
+    const conversationList =
+      document.getElementById("conversationList");
+
+    const messagesContainer =
+      document.getElementById("messages");
+
+    const chatTitle =
+      document.getElementById("chatTitle");
+
+    const chatStatus =
+      document.getElementById("chatStatus");
+
+    const searchInput =
+      document.getElementById("searchInput");
+
+    const messageInput =
+      document.getElementById("messageInput");
+
+    const sendBtn =
+      document.getElementById("sendBtn");
+
+    const takeoverBtn =
+      document.getElementById("takeoverBtn");
+
+    const botBtn =
+      document.getElementById("botBtn");
+
+    const closeBtn =
+      document.getElementById("closeBtn");
+
+    function formatDate(value) {
+      if (!value) {
+        return "";
+      }
+
+      const date = new Date(
+        value.replace(" ", "T") + "Z"
+      );
+
+      return new Intl.DateTimeFormat("ar-SA", {
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit",
+      }).format(date);
+    }
+
+    function getStatusText(status) {
+      if (status === "human") {
+        return "👤 الموظف مستلم المحادثة";
+      }
+
+      if (status === "closed") {
+        return "✅ المحادثة منتهية";
+      }
+
+      return "🤖 البوت يرد تلقائيًا";
+    }
+
+    function renderConversations() {
+      const search =
+        searchInput.value.trim().toLowerCase();
+
+      const filtered = conversations.filter((item) => {
+        const phone =
+          String(item.phone || "").toLowerCase();
+
+        const name =
+          String(item.guest_name || "").toLowerCase();
+
+        return (
+          phone.includes(search) ||
+          name.includes(search)
+        );
+      });
+
+      if (filtered.length === 0) {
+        conversationList.innerHTML =
+          '<div class="loading">لا توجد محادثات</div>';
+
+        return;
+      }
+
+      conversationList.innerHTML = filtered
+        .map((item) => {
+          const active =
+            item.phone === selectedPhone
+              ? "active"
+              : "";
+
+          return `
+            <button
+              class="conversation-item ${active}"
+              data-phone="${item.phone}"
+            >
+              <div class="conversation-top">
+                <span class="conversation-phone">
+                  ${item.guest_name || item.phone}
+                </span>
+
+                <span class="conversation-time">
+                  ${formatDate(item.updated_at)}
+                </span>
+              </div>
+
+              <div class="conversation-status">
+                ${getStatusText(item.status)}
+              </div>
+            </button>
+          `;
+        })
+        .join("");
+
+      document
+        .querySelectorAll(".conversation-item")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            openConversation(
+              button.dataset.phone
+            );
+          });
+        });
+    }
+
+    async function loadConversations() {
+      try {
+        const response = await fetch(
+          "/api/conversations"
+        );
+
+        const data = await response.json();
+
+        conversations =
+          data.conversations || [];
+
+        renderConversations();
+
+        if (selectedPhone) {
+          const current = conversations.find(
+            (item) =>
+              item.phone === selectedPhone
+          );
+
+          if (current) {
+            selectedStatus = current.status;
+            updateHeader(current);
+          }
+        }
+      } catch (error) {
+        conversationList.innerHTML =
+          '<div class="loading">فشل تحميل المحادثات</div>';
+      }
+    }
+
+    async function openConversation(phone) {
+      selectedPhone = phone;
+
+      const conversation =
+        conversations.find(
+          (item) => item.phone === phone
+        );
+
+      selectedStatus =
+        conversation?.status || "bot";
+
+      updateHeader(conversation);
+
+      renderConversations();
+
+      messagesContainer.innerHTML =
+        '<div class="loading">جارٍ تحميل الرسائل...</div>';
+
+      try {
+        const response = await fetch(
+          `/api/messages/${encodeURIComponent(phone)}`
+        );
+
+        const data = await response.json();
+
+        renderMessages(data.messages || []);
+      } catch (error) {
+        messagesContainer.innerHTML =
+          '<div class="loading">فشل تحميل الرسائل</div>';
+      }
+    }
+
+    function updateHeader(conversation) {
+      chatTitle.textContent =
+        conversation?.guest_name ||
+        conversation?.phone ||
+        "محادثة";
+
+      chatStatus.textContent =
+        getStatusText(
+          conversation?.status || selectedStatus
+        );
+
+      takeoverBtn.disabled = !selectedPhone;
+      botBtn.disabled = !selectedPhone;
+      closeBtn.disabled = !selectedPhone;
+
+      const employeeCanSend =
+        selectedPhone &&
+        selectedStatus === "human";
+
+      messageInput.disabled = !employeeCanSend;
+      sendBtn.disabled = !employeeCanSend;
+    }
+
+    function renderMessages(messages) {
+      if (messages.length === 0) {
+        messagesContainer.innerHTML =
+          '<div class="empty-state">لا توجد رسائل بعد</div>';
+
+        return;
+      }
+
+      messagesContainer.innerHTML = messages
+        .map((item) => {
+          const senderClass =
+            item.sender === "guest"
+              ? "guest"
+              : item.sender === "employee"
+              ? "employee"
+              : "bot";
+
+          const senderLabel =
+            item.sender === "guest"
+              ? "الضيف"
+              : item.sender === "employee"
+              ? "الموظف"
+              : "البوت";
+
+          return `
+            <div class="message ${senderClass}">
+              <div>${escapeHtml(item.message)}</div>
+
+              <div class="message-meta">
+                ${senderLabel} · ${formatDate(item.created_at)}
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      messagesContainer.scrollTop =
+        messagesContainer.scrollHeight;
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    searchInput.addEventListener(
+      "input",
+      renderConversations
+    );
+
+    document
+      .getElementById("composer")
+      .addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        alert(
+          "زر إرسال الموظف هيتربط في الخطوة الجاية."
+        );
+      });
+
+    takeoverBtn.addEventListener("click", () => {
+      alert(
+        "زر استلام المحادثة هيتربط في الخطوة الجاية."
+      );
+    });
+
+    botBtn.addEventListener("click", () => {
+      alert(
+        "زر إرجاع البوت هيتربط في الخطوة الجاية."
+      );
+    });
+
+    closeBtn.addEventListener("click", () => {
+      alert(
+        "زر إنهاء المحادثة هيتربط في الخطوة الجاية."
+      );
+    });
+
+    loadConversations();
+
+    setInterval(() => {
+      loadConversations();
+
+      if (selectedPhone) {
+        openConversation(selectedPhone);
+      }
+    }, 5000);
+  </script>
 </body>
-
 </html>
