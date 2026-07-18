@@ -663,6 +663,11 @@ async function processIncoming(body) {
     return;
   }
 
+  saveMessage(
+  incoming.from,
+  "guest",
+  incoming.text
+);
   processedMessageIds.set(
     incoming.id,
     Date.now()
