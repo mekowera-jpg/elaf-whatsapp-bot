@@ -657,52 +657,76 @@ async function processIncoming(body) {
     console.warn(
       "Incoming message missing required fields."
     );
+
     return;
   }
 
+  if (processedMessageIds.has(incoming.id)) {
+    console.log(
+      `Duplicate message ignored: ${incoming.id}`
+    );
+
+    return;
+  }
+
+  processedMessageIds.set(
+    incoming.id,
+    Date.now()
+  );
+
+  saveMessage(
+    incoming.from,
+    "guest",
+    incoming.text
+  );
+
+  saveConversation(incoming.from);
+
+  const conversation = db.prepare(`
+    SELECT status
+    FROM conversations
+    WHERE phone = ?
+  `).get(incoming.from);
+
   if (
-  processedMessageIds.has(incoming.id)
-) {
+    conversation?.status === "human" ||
+    conversation?.status === "closed"
+  ) {
+    console.log(
+      `Bot reply skipped for ${incoming.from}. Status: ${conversation.status}`
+    );
+
+    return;
+  }
+
   console.log(
-    `Duplicate message ignored: ${incoming.id}`
-  );
-  return;
-}
-
-processedMessageIds.set(
-  incoming.id,
-  Date.now()
-);
-
-saveMessage(
-  incoming.from,
-  "guest",
-  incoming.text
-);
-
-saveConversation(incoming.from);
-
-const conversation = db.prepare(`
-  SELECT status
-  FROM conversations
-  WHERE phone = ?
-`).get(incoming.from);
-
-if (
-  conversation?.status === "human" ||
-  conversation?.status === "closed"
-) {
-  console.log(
-    `Bot reply skipped for ${incoming.from}. Status: ${conversation.status}`
+    `Incoming message from ${incoming.from}: ${JSON.stringify(
+      incoming.text
+    )}`
   );
 
-  return;
-}
-saveTurn(
-  incoming.from,
-  incoming.text,
-  reply
-);
+  try {
+    const reply = await askGemini(
+      incoming.from,
+      incoming.text
+    );
+
+    await sendWhatsAppText(
+      incoming.from,
+      reply
+    );
+
+    saveMessage(
+      incoming.from,
+      "bot",
+      reply
+    );
+
+    saveTurn(
+      incoming.from,
+      incoming.text,
+      reply
+    );
   } catch (error) {
     console.error(
       "Message processing failed:",
