@@ -780,12 +780,17 @@ app.get("/api/messages/:phone", (req, res) => {
     });
   }
 });
-app.get("/", (_req, res) => {
-  res
-    .status(200)
-    .send("Elaf Assistant is running.");
-});
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(express.static(path.join(__dirname, "dashboard")));
+
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "dashboard", "index.html"));
+});
 app.get("/health", (_req, res) => {
   res.status(200).json({
     ok: true,
