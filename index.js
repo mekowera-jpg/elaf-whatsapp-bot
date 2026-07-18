@@ -1,10 +1,13 @@
+import path from "path";
+import { fileURLToPath } from "url";
+
 import db, {
   saveConversation,
   saveMessage
 } from "./database.js";
+
 import express from "express";
 import { SYSTEM_PROMPT } from "./system_prompt.js";
-
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
@@ -780,8 +783,6 @@ app.get("/api/messages/:phone", (req, res) => {
     });
   }
 });
-import path from "path";
-import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
