@@ -623,23 +623,44 @@
         );
       });
 
-    takeoverBtn.addEventListener("click", () => {
-      alert(
-        "زر استلام المحادثة هيتربط في الخطوة الجاية."
-      );
-    });
+    takeoverBtn.addEventListener("click", async () => {
+  if (!selectedPhone) return;
 
-    botBtn.addEventListener("click", () => {
-      alert(
-        "زر إرجاع البوت هيتربط في الخطوة الجاية."
-      );
-    });
+  await fetch(
+    `/api/conversations/${encodeURIComponent(selectedPhone)}/status`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        status: "human"
+      })
+    }
+  );
 
-    closeBtn.addEventListener("click", () => {
-      alert(
-        "زر إنهاء المحادثة هيتربط في الخطوة الجاية."
-      );
-    });
+  await loadConversations();
+  await openConversation(selectedPhone);
+});
+    botBtn.addEventListener("click", async () => {
+  if (!selectedPhone) return;
+
+  await fetch(
+    `/api/conversations/${encodeURIComponent(selectedPhone)}/status`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        status: "bot"
+      })
+    }
+  );
+
+  await loadConversations();
+  await openConversation(selectedPhone);
+});
 
     loadConversations();
 
