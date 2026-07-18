@@ -24,4 +24,26 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 `);
 
+export function saveConversation(phone) {
+  db.prepare(`
+    INSERT OR IGNORE INTO conversations (phone)
+    VALUES (?)
+  `).run(phone);
+
+  db.prepare(`
+    UPDATE conversations
+    SET updated_at = CURRENT_TIMESTAMP
+    WHERE phone = ?
+  `).run(phone);
+}
+
+export function saveMessage(phone, sender, message) {
+  db.prepare(`
+    INSERT INTO messages (phone, sender, message)
+    VALUES (?, ?, ?)
+  `).run(phone, sender, message);
+
+  saveConversation(phone);
+}
+
 export default db;
