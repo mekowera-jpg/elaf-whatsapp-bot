@@ -1,4 +1,7 @@
-import { saveConversation, saveMessage } from "./database.js";
+import db, {
+  saveConversation,
+  saveMessage
+} from "./database.js";
 import express from "express";
 import { SYSTEM_PROMPT } from "./system_prompt.js";
 
@@ -721,6 +724,62 @@ saveTurn(
   }
 }
 
+app.get("/api/conversations", (_req, res) => {
+  try {
+    const conversations = db.prepare(`
+      SELECT
+        phone,
+        guest_name,
+        status,
+        updated_at
+      FROM conversations
+      ORDER BY updated_at DESC
+    `).all();
+
+    res.json({
+      ok: true,
+      conversations,
+    });
+  } catch (error) {
+    console.error("Failed to load conversations:", error);
+
+    res.status(500).json({
+      ok: false,
+      error: "Failed to load conversations",
+    });
+  }
+});
+
+app.get("/api/messages/:phone", (req, res) => {
+  try {
+    const phone = String(req.params.phone || "").trim();
+
+    const messages = db.prepare(`
+      SELECT
+        id,
+        phone,
+        sender,
+        message,
+        created_at
+      FROM messages
+      WHERE phone = ?
+      ORDER BY id ASC
+    `).all(phone);
+
+    res.json({
+      ok: true,
+      phone,
+      messages,
+    });
+  } catch (error) {
+    console.error("Failed to load messages:", error);
+
+    res.status(500).json({
+      ok: false,
+      error: "Failed to load messages",
+    });
+  }
+});
 app.get("/", (_req, res) => {
   res
     .status(200)
