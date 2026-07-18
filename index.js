@@ -676,20 +676,26 @@ async function processIncoming(body) {
 
   try {
     const reply = await askGemini(
-      incoming.from,
-      incoming.text
-    );
+  incoming.from,
+  incoming.text
+);
 
-    await sendWhatsAppText(
-      incoming.from,
-      reply
-    );
+await sendWhatsAppText(
+  incoming.from,
+  reply
+);
 
-    saveTurn(
-      incoming.from,
-      incoming.text,
-      reply
-    );
+saveMessage(
+  incoming.from,
+  "bot",
+  reply
+);
+
+saveTurn(
+  incoming.from,
+  incoming.text,
+  reply
+);
   } catch (error) {
     console.error(
       "Message processing failed:",
