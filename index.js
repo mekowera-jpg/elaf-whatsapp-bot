@@ -661,13 +661,18 @@ async function processIncoming(body) {
   }
 
   if (
-    processedMessageIds.has(incoming.id)
-  ) {
-    console.log(
-      `Duplicate message ignored: ${incoming.id}`
-    );
-    return;
-  }
+  processedMessageIds.has(incoming.id)
+) {
+  console.log(
+    `Duplicate message ignored: ${incoming.id}`
+  );
+  return;
+}
+
+processedMessageIds.set(
+  incoming.id,
+  Date.now()
+);
 
 saveMessage(
   incoming.from,
@@ -675,37 +680,24 @@ saveMessage(
   incoming.text
 );
 
-saveConversation(
-  incoming.from
-);
-  processedMessageIds.set(
-    incoming.id,
-    Date.now()
-  );
+saveConversation(incoming.from);
 
+const conversation = db.prepare(`
+  SELECT status
+  FROM conversations
+  WHERE phone = ?
+`).get(incoming.from);
+
+if (
+  conversation?.status === "human" ||
+  conversation?.status === "closed"
+) {
   console.log(
-    `Incoming message from ${incoming.from}: ${JSON.stringify(
-      incoming.text
-    )}`
+    `Bot reply skipped for ${incoming.from}. Status: ${conversation.status}`
   );
 
-  try {
-    const reply = await askGemini(
-  incoming.from,
-  incoming.text
-);
-
-await sendWhatsAppText(
-  incoming.from,
-  reply
-);
-
-saveMessage(
-  incoming.from,
-  "bot",
-  reply
-);
-
+  return;
+}
 saveTurn(
   incoming.from,
   incoming.text,
@@ -826,6 +818,66 @@ app.post("/api/conversations/:phone/status", (req, res) => {
     res.status(500).json({
       ok: false,
       error: "Failed to update conversation status",
+    });
+  }
+});
+app.post("/api/messages/:phone/send", async (req, res) => {
+  try {
+    const phone = String(req.params.phone || "").trim();
+    const message = String(req.body.message || "").trim();
+
+    if (!phone || !message) {
+      return res.status(400).json({
+        ok: false,
+        error: "Phone and message are required",
+      });
+    }
+
+    const conversation = db.prepare(`
+      SELECT status
+      FROM conversations
+      WHERE phone = ?
+    `).get(phone);
+
+    if (!conversation) {
+      return res.status(404).json({
+        ok: false,
+        error: "Conversation not found",
+      });
+    }
+
+    if (conversation.status !== "human") {
+      return res.status(400).json({
+        ok: false,
+        error: "Conversation must be assigned to an employee",
+      });
+    }
+
+    await sendWhatsAppText(
+      phone,
+      message
+    );
+
+    saveMessage(
+      phone,
+      "employee",
+      message
+    );
+
+    res.json({
+      ok: true,
+      phone,
+      message,
+    });
+  } catch (error) {
+    console.error(
+      "Employee message failed:",
+      error?.message || error
+    );
+
+    res.status(500).json({
+      ok: false,
+      error: "Failed to send employee message",
     });
   }
 });
