@@ -1,4 +1,4 @@
-import db from "./database.js";
+import { saveConversation, saveMessage } from "./database.js";
 import express from "express";
 import { SYSTEM_PROMPT } from "./system_prompt.js";
 
