@@ -1,11 +1,15 @@
 import path from "path";
 import { fileURLToPath } from "url";
 
-import db, {
+import {
+  initializeDatabase,
   saveConversation,
-  saveMessage
-} from "./database.js";
-
+  saveMessage,
+  getConversations,
+  getMessages,
+  getConversationStatus,
+  setConversationStatus
+} from "./postgres.js";
 import express from "express";
 import { SYSTEM_PROMPT } from "./system_prompt.js";
 const app = express();
@@ -674,26 +678,22 @@ async function processIncoming(body) {
     Date.now()
   );
 
-  saveMessage(
+ await saveMessage(
     incoming.from,
     "guest",
     incoming.text
   );
 
-  saveConversation(incoming.from);
+ await saveConversation(incoming.from);
 
-  const conversation = db.prepare(`
-    SELECT status
-    FROM conversations
-    WHERE phone = ?
-  `).get(incoming.from);
-
-  if (
-    conversation?.status === "human" ||
-    conversation?.status === "closed"
-  ) {
+const conversationStatus =
+  await getConversationStatus(incoming.from);
+if (
+  conversationStatus === "human" ||
+  conversationStatus === "closed"
+) {
     console.log(
-      `Bot reply skipped for ${incoming.from}. Status: ${conversation.status}`
+      `Bot reply skipped for ${incoming.from}. Status:${conversationStatus}`
     );
 
     return;
@@ -747,17 +747,14 @@ async function processIncoming(body) {
   }
 }
 
-app.get("/api/conversations", (_req, res) => {
+app.get("/api/conversations", async (_req, res) => {
   try {
-    const conversations = db.prepare(`
-      SELECT
-        phone,
-        guest_name,
-        status,
-        updated_at
-      FROM conversations
-      ORDER BY updated_at DESC
-    `).all();
+    const conversations = await getConversations();
+
+    res.json({
+      ok: true,
+      conversations,
+    });
 
     res.json({
       ok: true,
@@ -816,21 +813,7 @@ app.post("/api/conversations/:phone/status", (req, res) => {
       });
     }
 
-    const result = db.prepare(`
-      UPDATE conversations
-      SET
-        status = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE phone = ?
-    `).run(status, phone);
-
-    if (result.changes === 0) {
-      return res.status(404).json({
-        ok: false,
-        error: "Conversation not found",
-      });
-    }
-
+   await setConversationStatus(phone, status);
     res.json({
       ok: true,
       phone,
@@ -845,7 +828,9 @@ app.post("/api/conversations/:phone/status", (req, res) => {
     });
   }
 });
-app.post("/api/messages/:phone/send", async (req, res) => {
+app.post(
+  "/api/messages/:phone/send", 
+  async (req, res) => {
   try {
     const phone = String(req.params.phone || "").trim();
     const message = String(req.body.message || "").trim();
@@ -857,20 +842,12 @@ app.post("/api/messages/:phone/send", async (req, res) => {
       });
     }
 
-    const conversation = db.prepare(`
-      SELECT status
-      FROM conversations
-      WHERE phone = ?
-    `).get(phone);
+    const conversationStatus =
+  await getConversationStatus(phone);
 
-    if (!conversation) {
-      return res.status(404).json({
-        ok: false,
-        error: "Conversation not found",
-      });
-    }
-
-    if (conversation.status !== "human") {
+if (
+  conversationStatus !== "human"
+) {
       return res.status(400).json({
         ok: false,
         error: "Conversation must be assigned to an employee",
@@ -980,20 +957,19 @@ app.use((error, _req, res, _next) => {
   }
 });
 
-app.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
-    console.log(
-      `Elaf Assistant listening on port ${PORT}`
-    );
+async function startServer() {
+  try {
+    await initializeDatabase();
 
-    console.log(
-      `Gemini model: ${GEMINI_MODEL}`
-    );
-
-    console.log(
-      `Graph API version: ${GRAPH_API_VERSION}`
-    );
+    app.listen(PORT, () => {
+      console.log(`Elaf Assistant listening on port ${PORT}`);
+      console.log(`Gemini model: ${GEMINI_MODEL}`);
+      console.log(`Graph API version: ${GRAPH_API_VERSION}`);
+    });
+  } catch (error) {
+    console.error("Failed to initialize PostgreSQL:", error);
+    process.exit(1);
   }
-);
+}
+
+startServer();
