@@ -11,9 +11,10 @@
   "engines": {
     "node": "22.x"
   },
-  "dependencies": {
-    "@google/genai": "^1.14.0",
-    "express": "^5.1.0",
-    "better-sqlite3": "^11.7.0"
-  }
+ "dependencies": {
+  "@google/genai": "^1.14.0",
+  "express": "^5.1.0",
+  "better-sqlite3": "^11.7.0",
+  "pg": "^8.13.1"
+}
 }
