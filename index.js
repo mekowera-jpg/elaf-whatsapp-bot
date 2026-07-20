@@ -678,16 +678,16 @@ async function processIncoming(body) {
     Date.now()
   );
 
- await saveMessage(
+  await saveMessage(
     incoming.from,
     "guest",
     incoming.text
   );
 
- await saveConversation(incoming.from);
+  await saveConversation(incoming.from);
 
-const conversationStatus =
-  await getConversationStatus(incoming.from);
+  const conversationStatus =
+    await getConversationStatus(incoming.from);
 if (
   conversationStatus === "human" ||
   conversationStatus === "closed"
@@ -716,7 +716,7 @@ if (
       reply
     );
 
-    saveMessage(
+    await saveMessage(
       incoming.from,
       "bot",
       reply
@@ -755,11 +755,6 @@ app.get("/api/conversations", async (_req, res) => {
       ok: true,
       conversations,
     });
-
-    res.json({
-      ok: true,
-      conversations,
-    });
   } catch (error) {
     console.error("Failed to load conversations:", error);
 
@@ -770,21 +765,18 @@ app.get("/api/conversations", async (_req, res) => {
   }
 });
 
-app.get("/api/messages/:phone", (req, res) => {
+app.get("/api/messages/:phone", async (req, res) => {
   try {
     const phone = String(req.params.phone || "").trim();
 
-    const messages = db.prepare(`
-      SELECT
-        id,
-        phone,
-        sender,
-        message,
-        created_at
-      FROM messages
-      WHERE phone = ?
-      ORDER BY id ASC
-    `).all(phone);
+    if (!phone) {
+      return res.status(400).json({
+        ok: false,
+        error: "Phone is required",
+      });
+    }
+
+    const messages = await getMessages(phone);
 
     res.json({
       ok: true,
@@ -801,7 +793,7 @@ app.get("/api/messages/:phone", (req, res) => {
   }
 });
 
-app.post("/api/conversations/:phone/status", (req, res) => {
+app.post("/api/conversations/:phone/status", async (req, res) => {
   try {
     const phone = String(req.params.phone || "").trim();
     const status = String(req.body.status || "").trim();
@@ -859,7 +851,7 @@ if (
       message
     );
 
-    saveMessage(
+    await saveMessage(
       phone,
       "employee",
       message
